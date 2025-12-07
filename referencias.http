@@ -1,0 +1,52 @@
+### Health check (só pra testar se o backend respondeu)
+GET http://localhost:3333/health
+
+### Criar usuário de teste (CLIENTE)
+POST http://localhost:3333/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Cliente Teste",
+  "email": "cliente@teste.com",
+  "phone": "(48) 99999-8888",
+  "password": "123456",
+  "role": "CLIENTE"
+}
+
+### LOGIN TESTE
+POST http://localhost:3333/auth/login
+Content-Type: application/json
+
+{
+  "phone": "(48) 99999-8888",
+  "password": "123456"
+}
+
+
+### Criar usuário barbeiro
+POST http://localhost:3333/auth/register
+Content-Type: application/json
+
+{
+  "fullName": "Barbeiro Chefe",
+  "email": "barbeiro@teste.com",
+  "phone": "(48) 99999-7777",
+  "password": "123456",
+  "role": "BARBER"
+}
+
+### Criar agendamento
+POST http://localhost:3333/appointments
+Content-Type: application/json
+
+{
+  "clientId": 1,
+  "professionalId": 1,
+  "serviceId": 1,
+  "startTime": "2025-03-04T14:00:00-03:00",
+  "notes": "Primeiro agendamento de teste"
+}
+
+
+### Listar agendamentos do cliente 1
+GET http://localhost:3333/clients/1/appointments
