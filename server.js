@@ -125,7 +125,9 @@ app.post('/auth/login', async (request, reply) => {
     const { phone, password } = request.body || {};
 
     if (!phone || !password) {
-      return reply.status(400).send({ error: "Telefone e senha são obrigatórios." });
+      return reply
+        .status(400)
+        .send({ error: "Telefone e senha são obrigatórios." });
     }
 
     const normalizedPhone = normalizePhone(phone);
@@ -152,12 +154,36 @@ app.post('/auth/login', async (request, reply) => {
 
     delete user.password_hash;
 
+    // Se for um barbeiro, carrega também o registro de professional
+    if (user.role === 'BARBER') {
+      const profQuery = `
+        SELECT id, barbershop_id, bio, is_active, is_master
+        FROM professionals
+        WHERE user_id = $1
+        LIMIT 1;
+      `;
+
+      const { rows: profRows } = await dbQuery(profQuery, [user.id]);
+
+      if (profRows.length) {
+        const prof = profRows[0];
+        user.professional = {
+          id: prof.id,
+          barbershop_id: prof.barbershop_id,
+          bio: prof.bio,
+          is_active: prof.is_active,
+          is_master: prof.is_master,
+        };
+      }
+    }
+
     return reply.send({ user });
   } catch (err) {
     request.log.error(err);
     return reply.status(500).send({ error: "Erro ao realizar login." });
   }
 });
+
 
 //
 // BARBEARIAS, PROFISSIONAIS, SERVIÇOS
@@ -271,6 +297,8 @@ app.post('/appointments', async (request, reply) => {
   }
 });
 
+
+
 // Agendamentos de um cliente
 app.get('/clients/:id/appointments', async (request, reply) => {
   try {
@@ -301,6 +329,71 @@ app.get('/clients/:id/appointments', async (request, reply) => {
     return reply
       .status(500)
       .send({ error: 'Erro ao buscar agendamentos do cliente.' });
+  }
+});
+
+// Agendamentos de HOJE de um profissional (tela Home do barbeiro)
+app.get('/professionals/:id/appointments/today', async (request, reply) => {
+  try {
+    const professionalId = Number(request.params.id);
+
+    if (!professionalId) {
+      return reply
+        .status(400)
+        .send({ error: 'ID do profissional inválido.' });
+    }
+
+    const query = `
+      SELECT
+        a.id,
+        a.start_time,
+        a.end_time,
+        a.status,
+        a.total_price_cents,
+        s.name  AS service_name,
+        u.full_name AS client_name
+      FROM appointments a
+      JOIN services s ON s.id = a.service_id
+      JOIN users u ON u.id = a.client_id
+      WHERE
+        a.professional_id = $1
+        AND a.status NOT IN ('CANCELLED', 'NO_SHOW')
+        AND a.start_time::date = CURRENT_DATE
+      ORDER BY a.start_time ASC;
+    `;
+
+    const { rows } = await dbQuery(query, [professionalId]);
+
+    return reply.send({ appointments: rows });
+  } catch (err) {
+    request.log.error(err);
+    return reply
+      .status(500)
+      .send({ error: 'Erro ao buscar agendamentos do profissional.' });
+  }
+});
+
+// CANCELAR APPOINTMENT
+app.patch("/appointments/:id/cancel", async (req, reply) => {
+  const { id } = req.params;
+
+  try {
+    const result = await dbQuery(
+      `UPDATE appointments
+       SET status = 'CANCELLED', updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return reply.status(404).send({ error: "Agendamento não encontrado." });
+    }
+
+    return { success: true, appointment: result.rows[0] };
+  } catch (err) {
+    console.error(err);
+    reply.status(500).send({ error: "Erro ao cancelar agendamento." });
   }
 });
 
